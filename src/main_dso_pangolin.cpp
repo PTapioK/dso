@@ -1,6 +1,6 @@
 /**
 * This file is part of DSO.
-* 
+*
 * Copyright 2016 Technical University of Munich and Intel.
 * Developed by Jakob Engel <engelj at in dot tum dot de>,
 * for more information see <http://vision.in.tum.de/dso>.
@@ -55,6 +55,7 @@ std::string vignette = "";
 std::string gammaCalib = "";
 std::string source = "";
 std::string calib = "";
+std::string resulttxt = "";
 double rescale = 1;
 bool reverse = false;
 bool disableROS = false;
@@ -290,6 +291,15 @@ void parseArgument(char* arg)
 		gammaCalib = buf;
 		printf("loading gammaCalib from %s!\n", gammaCalib.c_str());
 		return;
+	}
+
+	if(1==sscanf(arg,"resulttxt=%s",buf))
+	{
+		resulttxt = buf;
+		printf("result output is set to file %s!\n", resulttxt.c_str());
+		return;
+	} else {
+		resulttxt = "result.txt";
 	}
 
 	if(1==sscanf(arg,"rescale=%f",&foption))
@@ -531,7 +541,7 @@ int main( int argc, char** argv )
         gettimeofday(&tv_end, NULL);
 
 
-        fullSystem->printResult("result.txt");
+        fullSystem->printResult(resulttxt.c_str());
 
 
         int numFramesProcessed = abs(idsToPlay[0]-idsToPlay.back());

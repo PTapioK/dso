@@ -1,6 +1,6 @@
 /**
 * This file is part of DSO.
-* 
+*
 * Copyright 2016 Technical University of Munich and Intel.
 * Developed by Jakob Engel <engelj at in dot tum dot de>,
 * for more information see <http://vision.in.tum.de/dso>.
@@ -294,7 +294,13 @@ private:
 	inline void loadTimestamps()
 	{
 		std::ifstream tr;
-		std::string timesFile = path.substr(0,path.find_last_of('/')) + "/times.txt";
+		std::string timesFile;
+		if (path.substr(path.length() - 3, path.length()) == "zip") {
+			timesFile = path.substr(0,path.find_last_of('/')) + "/times.txt";
+		} else {
+			timesFile = path.substr(0,path.find_last_of('/')) + "/../times.txt";
+		}
+
 		tr.open(timesFile.c_str());
 		while(!tr.eof() && tr.good())
 		{
@@ -337,7 +343,6 @@ private:
 
 			if(exposures[i] == 0) exposuresGood=false;
 		}
-
 
 		if((int)getNumImages() != (int)timestamps.size())
 		{
