@@ -29,6 +29,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
+#include <chrono>
 
 #include "IOWrapper/Output3DWrapper.h"
 #include "IOWrapper/ImageDisplay.h"
@@ -444,6 +445,7 @@ int main( int argc, char** argv )
             }
         }
 
+        int nImages = (int)idsToPlay.size();
 
         std::vector<ImageAndExposure*> preloadedImages;
         if(preload)
@@ -456,11 +458,18 @@ int main( int argc, char** argv )
             }
         }
 
+        // Vector for tracking time statistics
+        std::vector<float> vTimesTrack;
+        std::vector<float> vLoadTimes;
+        vTimesTrack.resize(nImages);
+        vLoadTimes.resize(nImages);
+
         struct timeval tv_start;
         gettimeofday(&tv_start, NULL);
         clock_t started = clock();
         double sInitializerOffset=0;
 
+        std::chrono::steady_clock::time_point tstart = std::chrono::steady_clock::now();
 
         for(int ii=0;ii<(int)idsToPlay.size(); ii++)
         {
@@ -473,6 +482,7 @@ int main( int argc, char** argv )
 
             int i = idsToPlay[ii];
 
+            std::chrono::steady_clock::time_point tl1 = std::chrono::steady_clock::now();
 
             ImageAndExposure* img;
             if(preload)
@@ -480,7 +490,11 @@ int main( int argc, char** argv )
             else
                 img = reader->getImage(i);
 
+            std::chrono::steady_clock::time_point tl2 = std::chrono::steady_clock::now();
 
+            double tload = std::chrono::duration_cast<std::chrono::duration<double> >(tl2 - tl1).count();
+
+            vLoadTimes[ii] = tload;
 
             bool skipFrame=false;
             if(playbackSpeed!=0)
@@ -497,11 +511,18 @@ int main( int argc, char** argv )
                 }
             }
 
+            std::chrono::steady_clock::time_point t1 = std::chrono::steady_clock::now();
+
+            if(!skipFrame) {
+                fullSystem->addActiveFrame(img, i);
+            }
+
+            std::chrono::steady_clock::time_point t2 = std::chrono::steady_clock::now();
 
 
-            if(!skipFrame) fullSystem->addActiveFrame(img, i);
+            double ttrack= std::chrono::duration_cast<std::chrono::duration<double> >(t2 - t1).count();
 
-
+            vTimesTrack[ii]=ttrack;
 
 
             delete img;
@@ -540,26 +561,51 @@ int main( int argc, char** argv )
         struct timeval tv_end;
         gettimeofday(&tv_end, NULL);
 
+        std::chrono::steady_clock::time_point tend = std::chrono::steady_clock::now();
+
 
         fullSystem->printResult(resulttxt.c_str());
 
-
-        int numFramesProcessed = abs(idsToPlay[0]-idsToPlay.back());
-        double numSecondsProcessed = fabs(reader->getTimestamp(idsToPlay[0])-reader->getTimestamp(idsToPlay.back()));
-        double MilliSecondsTakenSingle = 1000.0f*(ended-started)/(float)(CLOCKS_PER_SEC);
-        double MilliSecondsTakenMT = sInitializerOffset + ((tv_end.tv_sec-tv_start.tv_sec)*1000.0f + (tv_end.tv_usec-tv_start.tv_usec)/1000.0f);
-        printf("\n======================"
-                "\n%d Frames (%.1f fps)"
-                "\n%.2fms per frame (single core); "
-                "\n%.2fms per frame (multi core); "
-                "\n%.3fx (single core); "
-                "\n%.3fx (multi core); "
-                "\n======================\n\n",
-                numFramesProcessed, numFramesProcessed/numSecondsProcessed,
-                MilliSecondsTakenSingle/numFramesProcessed,
-                MilliSecondsTakenMT / (float)numFramesProcessed,
-                1000 / (MilliSecondsTakenSingle/numSecondsProcessed),
-                1000 / (MilliSecondsTakenMT / numSecondsProcessed));
+        // Tracking time statistics
+        sort(vTimesTrack.begin(),vTimesTrack.end());
+        float totaltime = 0;
+        for(int ni=0; ni<nImages; ni++)
+        {
+            totaltime+=vTimesTrack[ni];
+        }
+        // Load time statistics
+        sort(vLoadTimes.begin(),vLoadTimes.end());
+        float totalloadtime = 0;
+        for(int ni=0; ni<nImages; ni++)
+        {
+            totalloadtime+=vLoadTimes[ni];
+        }
+        std::cout << "-------" << std::endl;
+        std::cout << "total tracking time: " << totaltime << std::endl;
+        std::cout << "median tracking time: " << vTimesTrack[nImages/2] << std::endl;
+        std::cout << "mean tracking time: " << totaltime/nImages << std::endl;
+        std::cout << "max tracking time: " << vTimesTrack[nImages-1] << std::endl;
+        std::cout << "loop time: " << (std::chrono::duration_cast<std::chrono::duration<double> >(tend - tstart).count()) << std::endl;
+        std::cout << "total image load time: " << totalloadtime << std::endl;
+        std::cout << "median image load time: " << vLoadTimes[nImages/2] << std::endl;
+        std::cout << "mean image load time: " << totalloadtime/nImages << std::endl;
+        std::cout << "max image load time: " << vLoadTimes[nImages-1] << std::endl;
+        // int numFramesProcessed = abs(idsToPlay[0]-idsToPlay.back());
+        // double numSecondsProcessed = fabs(reader->getTimestamp(idsToPlay[0])-reader->getTimestamp(idsToPlay.back()));
+        // double MilliSecondsTakenSingle = 1000.0f*(ended-started)/(float)(CLOCKS_PER_SEC);
+        // double MilliSecondsTakenMT = sInitializerOffset + ((tv_end.tv_sec-tv_start.tv_sec)*1000.0f + (tv_end.tv_usec-tv_start.tv_usec)/1000.0f);
+        // printf("\n======================"
+        //         "\n%d Frames (%.1f fps)"
+        //         "\n%.2fms per frame (single core); "
+        //         "\n%.2fms per frame (multi core); "
+        //         "\n%.3fx (single core); "
+        //         "\n%.3fx (multi core); "
+        //         "\n======================\n\n",
+        //         numFramesProcessed, numFramesProcessed/numSecondsProcessed,
+        //         MilliSecondsTakenSingle/numFramesProcessed,
+        //         MilliSecondsTakenMT / (float)numFramesProcessed,
+        //         1000 / (MilliSecondsTakenSingle/numSecondsProcessed),
+        //         1000 / (MilliSecondsTakenMT / numSecondsProcessed));
         //fullSystem->printFrameLifetimes();
         if(setting_logStuff)
         {
